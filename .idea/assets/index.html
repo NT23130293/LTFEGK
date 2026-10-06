@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PIKACHU</title>
+</head>
+<body>
+<main>
+    <section id="home" class="home">
+      <h1>PIKACHU</h1>
+        <div class="home-action">
+            <button id="play" class="peimary">Chơi từ đầu</button>
+            <button id="choose" class="secondary">Chọn màn chơi</button>
+
+        </div>
+
+    </section>
+    <section id="levels" class="screen" hidden>
+    <div class="section-head">
+        <div>
+            <div class="eyebrow">PIKACHU</div>
+            <h2>Chọn màn chơi</h2>
+        </div>
+        <button class="secondary back-home">← Trang chủ</button>
+    </div>
+    </section>
+    <section id="game" class="screen" hidden>
+        <div class="game-heading">
+            <button class="text-btn" id="exit">← Trang chủ</button>
+            <div>
+                <span id="level-number" class="eyebrow"></span>
+            </div>
+            <button class="secondary" id="pause">Ⅱ Tạm dừng</button>
+        </div>
+
+            <div class="stats">
+                <div>
+                    <span>THỜI GIAN</span>
+                    <strong id="timer">00:00</strong>
+                </div>
+
+                <div>
+                    <span>ĐIỂM</span>
+                    <strong id="score">0</strong>
+                </div>
+            </div>
+            <div class="board-frame">
+                <div id="board" class="board" aria-label="Bàn nối Pokémon"></div>
+                <svg id="path" aria-hidden="true"></svg>
+            </div>
+    </section>
+
+</main>
+
+</body>
+</html>
