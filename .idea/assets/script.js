@@ -120,6 +120,92 @@ function findPath(board, start, goal, blocked = new Set()) {
     }
     return null;
 }
+// các ô còn pokemon
+function getTilePositions(board = grid){
+    const positions = [];
+    for (let row = 1; row < board.length - 1; row += 1) {
+        for (let col = 1; col < board[0].length - 1; col += 1) {
+            const position = {r: row, c: col};
+            if (board[row][col] !== null && !blocked.has(cellKey(position))) {
+                positions.push(position);
+            }
+        }
+    }
+    return positions;
+
+
+    }
+    // các cặp có thể nối
+function findMoves(board = grid,  firstOnly = false) {
+    const groups = new Map();
+    const moves = [];
+    getTilePositions(board).forEach((position) => {
+        const pokemonId = board[position.r][position.c];
+        if (!groups.has(pokemonId)) {
+            groups.set(pokemonId, []);
+
+        }
+        groups.get(pokemonId).push(position);
+
+
+    });
+    for (const group of groups.values()) {
+        for (let firstIndex = 0; firstIndex < group.length; firstIndex += 1) {
+            for (let secondIndex = firstIndex + 1; secondIndex < group.length; secondIndex += 1) {
+                const first = group[firstIndex];
+                const second = group[secondIndex];
+                const path = findPath(board, first, second, blocked);
+                if (path) {
+                    moves.push({a: first, b: second, path});
+                    if (firstOnly) {
+
+                        return moves;
+                    }
+
+
+                }
+
+
+            }
+        }
+    }
+    return moves;
+
+}
+// xáo bài
+function buildBoard(config) {
+    const blocked = createWalls(config);
+    const positions = [];
+    for (let row = 1; row <= config.rows; row += 1) {
+        for (let col = 1; col <= config.cols; col += 1) {
+            if (!blocked.has(cellKey({r: row, c: col}))) {
+                positions.push({r: row, c: col});
+
+            }
+
+        }
+    }
+    const pokemonBag = [];
+    for (let pairIndex = 0; pairIndex < positions.length / 2; pairIndex += 1) {
+        const pokemonId = pairIndex % config.types;
+        pokemonBag.push(pokemonId, pokemonId);
+    }
+    let lastBoard = null;
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+        const board = Array.from(       { length: config.rows + 2 },       () => Array(config.cols + 2).fill(null));
+        const bag = shuffled(pokemonBag);
+        positions.forEach((position, index) => {
+            board[position.r][position.c] = bag[index];
+
+        });
+        lastBoard = board;
+
+
+
+    }
+
+
+
 
 
 
