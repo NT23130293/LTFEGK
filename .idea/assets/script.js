@@ -387,6 +387,106 @@ function compactIntoCorners(config) {
         }
     });
 }
+// xoay ô
+function rotateOuterRing(config) {
+    const ring = [];
+    for (let col = 1; col <= config.cols; col += 1) {
+        ring.push({r: 1, c: col});
+    }
+    for (let row = 2; row <= config.rows; row += 1) {
+        ring.push({r: row, c: config.cols});
+
+    }
+    for (let col = config.cols - 1; col >= 1; col -= 1) {
+        ring.push({r: config.rows, c: col});
+    }
+    for (let row = config.rows - 1; row >= 2; row -= 1) {
+        ring.push({r: row, c: 1});
+    }
+    const values = ring.map((position) => grid[position.r][position.c]);
+    ring.forEach((position, index) => {
+        const nextIndex = (index + 1) % ring.length;
+        grid[ring[nextIndex].r][ring[nextIndex].c] = values[index];
+    });
+}
+
+function moveConveyorColumns(config) {
+    for (let col = 2; col <= config.cols; col += 2) {
+        const lastValue = grid[config.rows][col];
+        for (let row = config.rows; row > 1; row -= 1) {
+            grid[row][col] = grid[row - 1][col];
+        }
+        grid[1][col] = lastValue;
+
+
+    }
+}
+function reverseClearedRows(clearedPositions, config) {
+    const affectedRows = new Set(clearedPositions.map((position) => position.r));
+    affectedRows.forEach((row) => {
+        const values = [];
+        for (let col = 1; col <= config.cols; col += 1) {
+            values.push(grid[row][col]);
+        }
+        values.reverse().forEach((value, index) => {
+            grid[row][index + 1] = value;
+        });
+    });
+
+
+
+
+        }
+function applyMovement(clearedPositions) {
+    const config = LEVELS[level];
+    if (config.mechanic === 'right') {
+        for (let row = 1; row <= config.rows; row += 1) {
+            const positions = Array.from(
+                {length: config.cols}, (_, index) => ({r: row, c: index + 1}));
+            compactLine(positions, 'end');
+
+        }
+
+
+    }
+    if (config.mechanic === 'down') {
+        for (let col = 1; col <= config.cols; col += 1) {
+            const positions = Array.from({length: config.rows}, (_, index) => ({r: index + 1, c: col}));
+            compactLine(positions, 'end')
+        }
+
+
+    }
+    if (config.mechanic === 'split') {
+
+        for (let row = 1; row <= config.rows; row += 1) {
+            const positions = Array.from({length: config.cols}, (_, index) => ({r: row, c: index + 1}));
+            const center = Math.floor(positions.length / 2);
+            compactLine(positions.slice(0, center), 'start');
+            compactLine(positions.slice(center), 'end');
+
+
+        }
+    }
+    if (config.mechanic === 'corners') {
+        compactIntoCorners(config);
+
+    }
+    if (config.mechanic === 'ring') {
+        rotateOuterRing(config);
+    }
+    if (config.mechanic === 'conveyor') {
+        moveConveyorColumns(config);
+    }
+    if (config.mechanic === 'flipRows') {
+        reverseClearedRows(clearedPositions, config);
+    }
+}
+
+
+
+
+
 
 
 
