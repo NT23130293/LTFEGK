@@ -192,7 +192,7 @@ function buildBoard(config) {
     }
     let lastBoard = null;
     for (let attempt = 0; attempt < 24; attempt += 1) {
-        const board = Array.from(       { length: config.rows + 2 },       () => Array(config.cols + 2).fill(null));
+        const board = Array.from({length: config.rows + 2}, () => Array(config.cols + 2).fill(null));
         const bag = shuffled(pokemonBag);
         positions.forEach((position, index) => {
             board[position.r][position.c] = bag[index];
@@ -201,8 +201,8 @@ function buildBoard(config) {
         lastBoard = board;
 
 
-
     }
+}
 
 
 
