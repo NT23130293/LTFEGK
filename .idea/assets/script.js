@@ -31,7 +31,7 @@ const LEVELS = [
     {
         name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
         mechanic: 'right', label: 'Dồn sang phải ',
-       
+
     }
     ];
 const $ = (id) => document.getElementById(id);

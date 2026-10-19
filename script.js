@@ -1,6 +1,4 @@
 'use strict';
-
-// Khởi tạo các cặp chẵn và thêm một hàng/cột trống bao quanh bàn.
 function buildBoard(config) {
   const board = Array.from({ length: config.rows + 2 }, () => Array(config.cols + 2).fill(null));
   const bag = [];
@@ -50,11 +48,22 @@ function render() {
   }
   updateStats();
 }
-
-// Dồn phải ổn định: duyệt từ phải sang trái, giữ thứ tự các quân còn lại. O(hàng × cột).
 function applyMovement() {
-  if (LEVELS[level].mechanic !== 'right') return;
-  const { rows, cols } = LEVELS[level];
+  const { rows, cols, mechanic } = LEVELS[level];
+  if (mechanic === 'down') {
+    for (let c = 1; c <= cols; c++) {
+      let write = rows;
+      for (let r = rows; r >= 1; r--) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[write--][c] = value;
+        }
+      }
+    }
+    return;
+  }
+  if (mechanic !== 'right') return;
   for (let r = 1; r <= rows; r++) {
     let write = cols;
     for (let c = cols; c >= 1; c--) {
@@ -79,7 +88,6 @@ function completeMatch(first, second, path) {
   tileAt(second).classList.add('matched');
   drawPath(path);
   const thisSession = session;
-  // Hoạt ảnh chỉ hoàn tất khi người chơi tiếp tục; phiên cũ không được sửa bàn mới.
   const commit = () => {
     if (thisSession !== session || !active) return;
     if (paused) { window.setTimeout(commit, 100); return; }
@@ -99,7 +107,6 @@ function completeMatch(first, second, path) {
 }
 
 
-// Dữ liệu hình ảnh cục bộ, chỉ sử dụng tám loại cho hai màn đầu.
 const POKEMON = [
   { name: 'Pikachu', image: 'assets/pokemon/pikachu.png' },
   { name: 'Bulbasaur', image: 'assets/pokemon/bulbasaur.png' },
@@ -109,21 +116,24 @@ const POKEMON = [
   { name: 'Meowth', image: 'assets/pokemon/meowth.png' },
   { name: 'Psyduck', image: 'assets/pokemon/psyduck.png' },
   { name: 'Eevee', image: 'assets/pokemon/eevee.png' },
+  { name: 'Snorlax', image: 'assets/pokemon/snorlax.png' },
+  { name: 'Gengar', image: 'assets/pokemon/gengar.png' },
+  { name: 'Vulpix', image: 'assets/pokemon/vulpix.png' },
+  { name: 'Mewtwo', image: 'assets/pokemon/mewtwo.png' },
 ];
 
 const LEVELS = [
   { name: 'Làm quen', rows: 9, cols: 16, types: 6, time: 600,
-    mechanic: 'still', label: 'Đứng yên',
-    help: 'Nối hai Pokémon giống nhau bằng đường đi có tối đa hai lần rẽ.' },
+    mechanic: 'still', label: 'Đứng yên' },
   { name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
-    mechanic: 'right', label: 'Dồn sang phải →',
-    help: '' }
+    mechanic: 'right', label: 'Dồn sang phải' },
+  { name: 'Rơi xuống', rows: 9, cols: 16, types: 12, time: 510,
+    mechanic: 'down', label: 'Dồn xuống' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
 let active = false, paused = false, busy = false;
 let seconds = 0, points = 0, lastTick = 0, session = 0;
-// Các tập rỗng giữ giao diện thuật toán BFS tương thích với bản tham khảo.
 let walls = new Set(), frozen = new Set(), revealed = new Set();
 
 function cellKey(position) {
@@ -134,7 +144,6 @@ function sameCell(first, second) {
   return first.r === second.r && first.c === second.c;
 }
 
-// Fisher–Yates: trộn ngẫu nhiên trên bản sao, độ phức tạp O(n).
 function shuffled(values) {
   const result = [...values];
 
@@ -146,8 +155,6 @@ function shuffled(values) {
   return result;
 }
 
-// BFS theo trạng thái (hàng, cột, hướng, số lần rẽ).
-// Viền null quanh bàn cho phép nối vòng ngoài; chỉ chấp nhận tối đa hai lần rẽ.
 function findPath(board, start, goal, blocked = new Set()) {
   if (sameCell(start, goal)) {
     return null;
@@ -239,7 +246,6 @@ function getTilePositions(board = grid, blocked = walls) {
   return positions;
 }
 
-// Gom ô theo loại Pokémon rồi tìm cặp có đường đi hợp lệ.
 function findMoves(board = grid, blocked = walls, frozenCells = frozen, firstOnly = false) {
   const groups = new Map();
   const moves = [];
@@ -357,7 +363,6 @@ function start(index) {
   }
   showScreen('game');
   render();
-  say(LEVELS[level].help);
 
   if (!findMoves(grid, walls, frozen, true).length) {
     reshuffle();
@@ -406,8 +411,6 @@ function selectNormalTile(position) {
   }, 420);
 }
 
-// Khi xáo ngẫu nhiên vẫn bế tắc, đặt một cặp vào hai vị trí nối được.
-// Chỉ hoán vị giá trị: giữ nguyên số lượng mỗi loại và vị trí ô trống.
 function forceConnectablePair(positions, originalValues) {
   const pairPositions = positions.filter((position) => !frozen.has(cellKey(position)));
 
@@ -468,7 +471,6 @@ function forceConnectablePair(positions, originalValues) {
   return false;
 }
 
-// Xáo các quân còn lại, tối đa 60 lần rồi dùng phương án bảo đảm một nước đi.
 function reshuffle() {
   deselect();
   revealed.clear();
