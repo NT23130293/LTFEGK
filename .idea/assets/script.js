@@ -31,7 +31,7 @@ const LEVELS = [
     {
         name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
         mechanic: 'right', label: 'Dồn sang phải ',
-        help: 'Sau mỗi cặp, Pokémon trong từng hàng dồn về mép phải.'
+       
     }
     ];
 const $ = (id) => document.getElementById(id);
@@ -198,11 +198,308 @@ function buildBoard(config) {
             board[position.r][position.c] = bag[index];
 
         });
-        lastBoard = board;
 
 
     }
 }
+function showScreen(name) {
+    ['home', 'levels', 'game'].forEach((screenId) => {
+        $(screenId).hidden = screenId !== name;
+    });
+    window.scrollTo(0, 0);
+
+
+}
+function clearPath() {
+    $('path').replaceChildren();
+
+}
+function tileAt(position) {
+    return document.querySelector(`.tile[data-r="${position.r}"][data-c="${position.c}"]`);
+}
+function drawPath(path) {
+    clearPath();
+    const frame = document.querySelector('.board-frame').getBoundingClientRect();
+    const first = tileAt({ r: 1, c: 1 }).getBoundingClientRect();
+    const nextColumn = tileAt({ r: 1, c: 2 }).getBoundingClientRect();
+    const nextRow = tileAt({ r: 2, c: 1 }).getBoundingClientRect();
+    const stepX = nextColumn.left - first.left;
+    const stepY = nextRow.top - first.top;
+    const points = path.map((position) => {
+        const x = first.left - frame.left + first.width / 2 + (position.c - 1) * stepX;
+        const y = first.top - frame.top + first.height / 2 + (position.r - 1) * stepY;
+        return `${x},${y}`;
+
+    }).join('');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    line.setAttribute('points', points);
+    $('path').append(line);
+
+
+}
+// đồng hô
+function updateStats() {
+    const wholeSeconds = Math.max(0, Math.ceil(seconds));
+    const minutes = String(Math.floor(wholeSeconds / 60)).padStart(2, '0');
+    const remainder = String(wholeSeconds % 60).padStart(2, '0');
+    const totalPairs = getTilePositions().length / 2;
+
+    $('timer').textContent = `${minutes}:${remainder}`;
+    const remaining = $('remaining');
+    if (remaining) {
+        remaining.innerHTML = `${totalPairs} <small>cặp</small>`;
+    }
+    $('score').textContent = points;
+    if (LEVELS[level].mechanic === 'combo') {
+        const movement = $('movement');
+        if (movement) {
+            movement.textContent = `Chuỗi ${comboStreak}/5`;
+        }
+    }
+
+
+
+
+    }
+function  say(message){
+    const messageElement = $('message');
+if( messageElement){
+    messageElement.textContent = message;
+}
+}
+function render() {
+    const config = LEVELS[level];
+    const boardElement = $('board');
+    boardElement.style.setProperty('--cols', config.cols);
+    boardElement.replaceChildren();
+    for (let row = 1; row <= config.rows; row += 1) {
+        for (let col = 1; col <= config.cols; col += 1) {
+            const position = { r: row, c: col };
+            const key = cellKey(position);
+            const value = grid[row][col];
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'tile';
+            button.dataset.r = row;
+            button.dataset.c = col;
+            button.setAttribute('aria-pressed', String(Boolean(selected && sameCell(selected, position))));
+            button.addEventListener('click', () => selectTile(position));
+            boardElement.append(button);
+
+        }
+    }
+    updateStats();
+}
+function deselect() {
+    document.querySelectorAll('.selected').forEach((element) => {
+        element.classList.remove('selected');
+        element.setAttribute('aria-pressed', 'false');
+    });
+    selected = null
+    }
+function start(index) {
+    session += 1;
+    level = index;
+    active = false;
+    paused = false;
+    busy = false;
+    selected = null;
+
+    revealed = new Set();
+    clearPath();
+
+    if ($('modal').open) {
+        $('modal').close();
+    }
+    const newBoard = buildBoard(LEVELS[level]);
+    grid = newBoard.board;
+    seconds = LEVELS[level].time;
+    points = 0;
+    active = true;
+    lastTick = performance.now();
+    $('level-number').textContent = `MÀN ${level + 1}/${LEVELS.length}`;
+    const movement = $('movement');
+    if (movement) {
+        movement.textContent = LEVELS[level].label;
+    }
+    showScreen('game');
+    render();
+    say('Chọn hai ô giống nhau để nối.');
+    if (!findMoves(grid, walls, frozen, true).length) {
+        reshuffle();
+        render();
+
+    }
+}
+function compactLine(positions, alignment) {
+    const values = positions.map((position)=> grid[position.r][position.c]).filter((value) => value !== null);
+    positions.forEach((position) => {
+        grid[position.r][position.c] = null;
+    });
+    let offset = 0;
+    if (alignment === 'end') {
+        offset = positions.length - values.length;
+    } else if (alignment === 'center') {
+        offset = Math.floor((positions.length - values.length) / 2);
+
+    }
+    values.forEach((value, index) => {
+        const position = positions[index + offset];
+        grid[position.r][position.c] = value;
+
+    });
+
+
+
+    }
+// Dồn từng góc phần tư về góc ngoài
+function compactIntoCorners(config) {
+    const middleRow = Math.floor(config.rows / 2);
+    const middleCol = Math.floor(config.cols / 2);
+    const quadrants = [
+        {top: 1, bottom: middleRow, left: 1, right: middleCol, horizontal: 'start', vertical: 'start'},
+        {top: 1, bottom: middleRow, left: middleCol + 1, right: config.cols, horizontal: 'end', vertical: 'start'},
+        {top: middleRow + 1, bottom: config.rows, left: 1, right: middleCol, horizontal: 'start', vertical: 'end'},
+        {
+            top: middleRow + 1,
+            bottom: config.rows,
+            left: middleCol + 1,
+            right: config.cols,
+            horizontal: 'end',
+            vertical: 'end'
+        }
+    ];
+    quadrants.forEach((quadrant) => {
+        for (let row = quadrant.top; row <= quadrant.bottom; row += 1) {
+            const rowCells = [];
+            for (let col = quadrant.left; col <= quadrant.right; col += 1) {
+                rowCells.push({r: row, c: col});
+
+            }
+            compactLine(rowCells, quadrant.horizontal);
+        }
+        for (let col = quadrant.left; col <= quadrant.right; col += 1) {
+            const columnCells = [];
+            for (let row = quadrant.top; row <= quadrant.bottom; row += 1) {
+                columnCells.push({r: row, c: col});
+            }
+            compactLine(columnCells, quadrant.vertical);
+        }
+    });
+}
+// xoay ô
+function rotateOuterRing(config) {
+    const ring = [];
+    for (let col = 1; col <= config.cols; col += 1) {
+        ring.push({r: 1, c: col});
+    }
+    for (let row = 2; row <= config.rows; row += 1) {
+        ring.push({r: row, c: config.cols});
+
+    }
+    for (let col = config.cols - 1; col >= 1; col -= 1) {
+        ring.push({r: config.rows, c: col});
+    }
+    for (let row = config.rows - 1; row >= 2; row -= 1) {
+        ring.push({r: row, c: 1});
+    }
+    const values = ring.map((position) => grid[position.r][position.c]);
+    ring.forEach((position, index) => {
+        const nextIndex = (index + 1) % ring.length;
+        grid[ring[nextIndex].r][ring[nextIndex].c] = values[index];
+    });
+}
+
+function moveConveyorColumns(config) {
+    for (let col = 2; col <= config.cols; col += 2) {
+        const lastValue = grid[config.rows][col];
+        for (let row = config.rows; row > 1; row -= 1) {
+            grid[row][col] = grid[row - 1][col];
+        }
+        grid[1][col] = lastValue;
+
+
+    }
+}
+function reverseClearedRows(clearedPositions, config) {
+    const affectedRows = new Set(clearedPositions.map((position) => position.r));
+    affectedRows.forEach((row) => {
+        const values = [];
+        for (let col = 1; col <= config.cols; col += 1) {
+            values.push(grid[row][col]);
+        }
+        values.reverse().forEach((value, index) => {
+            grid[row][index + 1] = value;
+        });
+    });
+
+
+
+
+        }
+function applyMovement(clearedPositions) {
+    const config = LEVELS[level];
+    if (config.mechanic === 'right') {
+        for (let row = 1; row <= config.rows; row += 1) {
+            const positions = Array.from(
+                {length: config.cols}, (_, index) => ({r: row, c: index + 1}));
+            compactLine(positions, 'end');
+
+        }
+
+
+    }
+    if (config.mechanic === 'down') {
+        for (let col = 1; col <= config.cols; col += 1) {
+            const positions = Array.from({length: config.rows}, (_, index) => ({r: index + 1, c: col}));
+            compactLine(positions, 'end')
+        }
+
+
+    }
+    if (config.mechanic === 'split') {
+
+        for (let row = 1; row <= config.rows; row += 1) {
+            const positions = Array.from({length: config.cols}, (_, index) => ({r: row, c: index + 1}));
+            const center = Math.floor(positions.length / 2);
+            compactLine(positions.slice(0, center), 'start');
+            compactLine(positions.slice(center), 'end');
+
+
+        }
+    }
+    if (config.mechanic === 'corners') {
+        compactIntoCorners(config);
+
+    }
+    if (config.mechanic === 'ring') {
+        rotateOuterRing(config);
+    }
+    if (config.mechanic === 'conveyor') {
+        moveConveyorColumns(config);
+    }
+    if (config.mechanic === 'flipRows') {
+        reverseClearedRows(clearedPositions, config);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
