@@ -31,7 +31,7 @@ const LEVELS = [
     {
         name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
         mechanic: 'right', label: 'Dồn sang phải ',
-        help: 'Sau mỗi cặp, Pokémon trong từng hàng dồn về mép phải.'
+       
     }
     ];
 const $ = (id) => document.getElementById(id);
