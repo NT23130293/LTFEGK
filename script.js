@@ -50,6 +50,28 @@ function render() {
 }
 function applyMovement() {
   const { rows, cols, mechanic } = LEVELS[level];
+  if (mechanic === 'split') {
+    const middle = Math.floor(cols / 2);
+    for (let r = 1; r <= rows; r++) {
+      let write = 1;
+      for (let c = 1; c <= middle; c++) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[r][write++] = value;
+        }
+      }
+      write = cols;
+      for (let c = cols; c > middle; c--) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[r][write--] = value;
+        }
+      }
+    }
+    return;
+  }
   if (mechanic === 'down') {
     for (let c = 1; c <= cols; c++) {
       let write = rows;
@@ -120,6 +142,10 @@ const POKEMON = [
   { name: 'Gengar', image: 'assets/pokemon/gengar.png' },
   { name: 'Vulpix', image: 'assets/pokemon/vulpix.png' },
   { name: 'Mewtwo', image: 'assets/pokemon/mewtwo.png' },
+  { name: 'Mew', image: 'assets/pokemon/mew.png' },
+  { name: 'Clefairy', image: 'assets/pokemon/clefairy.png' },
+  { name: 'Pidgey', image: 'assets/pokemon/pidgey.png' },
+  { name: 'Rattata', image: 'assets/pokemon/rattata.png' },
 ];
 
 const LEVELS = [
@@ -128,7 +154,9 @@ const LEVELS = [
   { name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
     mechanic: 'right', label: 'Dồn sang phải' },
   { name: 'Rơi xuống', rows: 9, cols: 16, types: 12, time: 510,
-    mechanic: 'down', label: 'Dồn xuống' }
+    mechanic: 'down', label: 'Dồn xuống' },
+  { name: 'Tách đôi', rows: 9, cols: 16, types: 16, time: 480,
+    mechanic: 'split', label: 'Tách hai phía' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
