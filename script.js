@@ -1,13 +1,32 @@
 'use strict';
+function createWalls(config) {
+  const blocked = new Set();
+  if (config.mechanic !== 'cross') return blocked;
+  const centerRow = 1 + Math.floor((config.rows - 1) / 2);
+  const leftCenterCol = 1 + Math.floor((config.cols - 1) / 2);
+  const rightCenterCol = leftCenterCol + 1;
+  for (let c = leftCenterCol - 1; c <= rightCenterCol + 1; c++) {
+    blocked.add(cellKey({ r: centerRow, c }));
+  }
+  for (let r = centerRow - 1; r <= centerRow + 1; r++) {
+    blocked.add(cellKey({ r, c: leftCenterCol }));
+    blocked.add(cellKey({ r, c: rightCenterCol }));
+  }
+  return blocked;
+}
+
 function buildBoard(config) {
   const board = Array.from({ length: config.rows + 2 }, () => Array(config.cols + 2).fill(null));
+  const blocked = createWalls(config);
   const bag = [];
-  for (let i = 0; i < config.rows * config.cols / 2; i++) bag.push(i % config.types, i % config.types);
+  for (let i = 0; i < (config.rows * config.cols - blocked.size) / 2; i++) bag.push(i % config.types, i % config.types);
   const values = shuffled(bag);
   for (let r = 1, i = 0; r <= config.rows; r++) {
-    for (let c = 1; c <= config.cols; c++) board[r][c] = values[i++];
+    for (let c = 1; c <= config.cols; c++) {
+      if (!blocked.has(cellKey({ r, c }))) board[r][c] = values[i++];
+    }
   }
-  return { board, blocked: new Set(), frozenCells: new Set() };
+  return { board, blocked, frozenCells: new Set() };
 }
 
 function say(message) { const element = $('message'); if (element) element.textContent = message; }
@@ -26,14 +45,17 @@ function render() {
   for (let r = 1; r <= config.rows; r++) {
     for (let c = 1; c <= config.cols; c++) {
       const value = grid[r][c];
+      const isWall = walls.has(cellKey({ r, c }));
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = value === null ? 'tile empty' : 'tile';
+      button.className = isWall ? 'tile wall' : value === null ? 'tile empty' : 'tile';
       button.dataset.r = r;
       button.dataset.c = c;
-      button.disabled = value === null;
+      button.disabled = isWall || value === null;
       button.setAttribute('aria-pressed', 'false');
-      if (value !== null) {
+      if (isWall) {
+        button.setAttribute('aria-label', 'Tường đá, vật cản');
+      } else if (value !== null) {
         const pokemon = POKEMON[value];
         const image = document.createElement('img');
         image.src = pokemon.image;
@@ -156,7 +178,9 @@ const LEVELS = [
   { name: 'Rơi xuống', rows: 9, cols: 16, types: 12, time: 510,
     mechanic: 'down', label: 'Dồn xuống' },
   { name: 'Tách đôi', rows: 9, cols: 16, types: 16, time: 480,
-    mechanic: 'split', label: 'Tách hai phía' }
+    mechanic: 'split', label: 'Tách hai phía' },
+  { name: 'Tường chữ thập', rows: 9, cols: 16, types: 16, time: 480,
+    mechanic: 'cross', label: 'Có tường giữa' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
