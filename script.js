@@ -26,7 +26,9 @@ function buildBoard(config) {
       if (!blocked.has(cellKey({ r, c }))) board[r][c] = values[i++];
     }
   }
-  return { board, blocked, frozenCells: new Set() };
+  const frozenCells = config.mechanic === 'ice'
+    ? createWalls({ ...config, mechanic: 'cross' }) : new Set();
+  return { board, blocked, frozenCells };
 }
 
 function say(message) { const element = $('message'); if (element) element.textContent = message; }
@@ -46,12 +48,14 @@ function render() {
     for (let c = 1; c <= config.cols; c++) {
       const value = grid[r][c];
       const isWall = walls.has(cellKey({ r, c }));
+      const isFrozen = value !== null && frozen.has(cellKey({ r, c }));
       const button = document.createElement('button');
       button.type = 'button';
       button.className = isWall ? 'tile wall' : value === null ? 'tile empty' : 'tile';
       button.dataset.r = r;
       button.dataset.c = c;
-      button.disabled = isWall || value === null;
+      button.disabled = isWall || isFrozen || value === null;
+      if (isFrozen) button.classList.add('frozen');
       button.setAttribute('aria-pressed', 'false');
       if (isWall) {
         button.setAttribute('aria-label', 'Tường đá, vật cản');
@@ -62,7 +66,7 @@ function render() {
         image.alt = '';
         image.draggable = false;
         button.append(image);
-        button.setAttribute('aria-label', `${pokemon.name}, hàng ${r}, cột ${c}`);
+        button.setAttribute('aria-label', `${pokemon.name}, hàng ${r}, cột ${c}${isFrozen ? ', đang đóng băng' : ''}`);
         button.addEventListener('click', () => selectTile({ r, c }));
       } else button.setAttribute('aria-label', 'Ô trống');
       board.append(button);
@@ -121,8 +125,21 @@ function applyMovement() {
 }
 
 function selectTile(position) {
-  if (!active || paused || busy || grid[position.r][position.c] === null) return;
+  if (!active || paused || busy || grid[position.r][position.c] === null || walls.has(cellKey(position)) || frozen.has(cellKey(position))) return;
   selectNormalTile(position);
+}
+
+function thawIceBeside(first, second) {
+  const config = LEVELS[level];
+  const centerRow = 1 + Math.floor((config.rows - 1) / 2);
+  const leftCenterCol = 1 + Math.floor((config.cols - 1) / 2);
+  for (const position of [first, second]) {
+    const corner = Math.abs(position.r - centerRow) === 1 &&
+      (position.c === leftCenterCol - 1 || position.c === leftCenterCol + 2);
+    for (const [dr, dc] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      if (frozen.delete(cellKey({ r: position.r + dr, c: position.c + dc })) && corner) break;
+    }
+  }
 }
 
 function completeMatch(first, second, path) {
@@ -138,6 +155,7 @@ function completeMatch(first, second, path) {
     grid[first.r][first.c] = null;
     grid[second.r][second.c] = null;
     points += 100;
+    if (LEVELS[level].mechanic === 'ice') thawIceBeside(first, second);
     applyMovement();
     clearPath();
     busy = false;
@@ -168,6 +186,8 @@ const POKEMON = [
   { name: 'Clefairy', image: 'assets/pokemon/clefairy.png' },
   { name: 'Pidgey', image: 'assets/pokemon/pidgey.png' },
   { name: 'Rattata', image: 'assets/pokemon/rattata.png' },
+  { name: 'Sandshrew', image: 'assets/pokemon/sandshrew.png' },
+  { name: 'Oddish', image: 'assets/pokemon/oddish.png' },
 ];
 
 const LEVELS = [
@@ -180,7 +200,9 @@ const LEVELS = [
   { name: 'Tách đôi', rows: 9, cols: 16, types: 16, time: 480,
     mechanic: 'split', label: 'Tách hai phía' },
   { name: 'Tường chữ thập', rows: 9, cols: 16, types: 16, time: 480,
-    mechanic: 'cross', label: 'Có tường giữa' }
+    mechanic: 'cross', label: 'Có tường giữa' },
+  { name: 'Băng chữ thập', rows: 9, cols: 16, types: 18, time: 450,
+    mechanic: 'ice', label: 'Băng tan khi kề bên mất' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
