@@ -1,15 +1,34 @@
 'use strict';
+function createWalls(config) {
+  const blocked = new Set();
+  if (config.mechanic !== 'cross') return blocked;
+  const centerRow = 1 + Math.floor((config.rows - 1) / 2);
+  const leftCenterCol = 1 + Math.floor((config.cols - 1) / 2);
+  const rightCenterCol = leftCenterCol + 1;
+  for (let c = leftCenterCol - 1; c <= rightCenterCol + 1; c++) {
+    blocked.add(cellKey({ r: centerRow, c }));
+  }
+  for (let r = centerRow - 1; r <= centerRow + 1; r++) {
+    blocked.add(cellKey({ r, c: leftCenterCol }));
+    blocked.add(cellKey({ r, c: rightCenterCol }));
+  }
+  return blocked;
+}
 
-// Khởi tạo các cặp chẵn và thêm một hàng/cột trống bao quanh bàn.
 function buildBoard(config) {
   const board = Array.from({ length: config.rows + 2 }, () => Array(config.cols + 2).fill(null));
+  const blocked = createWalls(config);
   const bag = [];
-  for (let i = 0; i < config.rows * config.cols / 2; i++) bag.push(i % config.types, i % config.types);
+  for (let i = 0; i < (config.rows * config.cols - blocked.size) / 2; i++) bag.push(i % config.types, i % config.types);
   const values = shuffled(bag);
   for (let r = 1, i = 0; r <= config.rows; r++) {
-    for (let c = 1; c <= config.cols; c++) board[r][c] = values[i++];
+    for (let c = 1; c <= config.cols; c++) {
+      if (!blocked.has(cellKey({ r, c }))) board[r][c] = values[i++];
+    }
   }
-  return { board, blocked: new Set(), frozenCells: new Set() };
+  const frozenCells = config.mechanic === 'ice'
+    ? createWalls({ ...config, mechanic: 'cross' }) : new Set();
+  return { board, blocked, frozenCells };
 }
 
 function say(message) { const element = $('message'); if (element) element.textContent = message; }
@@ -28,21 +47,26 @@ function render() {
   for (let r = 1; r <= config.rows; r++) {
     for (let c = 1; c <= config.cols; c++) {
       const value = grid[r][c];
+      const isWall = walls.has(cellKey({ r, c }));
+      const isFrozen = value !== null && frozen.has(cellKey({ r, c }));
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = value === null ? 'tile empty' : 'tile';
+      button.className = isWall ? 'tile wall' : value === null ? 'tile empty' : 'tile';
       button.dataset.r = r;
       button.dataset.c = c;
-      button.disabled = value === null;
+      button.disabled = isWall || isFrozen || value === null;
+      if (isFrozen) button.classList.add('frozen');
       button.setAttribute('aria-pressed', 'false');
-      if (value !== null) {
+      if (isWall) {
+        button.setAttribute('aria-label', 'Tường đá, vật cản');
+      } else if (value !== null) {
         const pokemon = POKEMON[value];
         const image = document.createElement('img');
         image.src = pokemon.image;
         image.alt = '';
         image.draggable = false;
         button.append(image);
-        button.setAttribute('aria-label', `${pokemon.name}, hàng ${r}, cột ${c}`);
+        button.setAttribute('aria-label', `${pokemon.name}, hàng ${r}, cột ${c}${isFrozen ? ', đang đóng băng' : ''}`);
         button.addEventListener('click', () => selectTile({ r, c }));
       } else button.setAttribute('aria-label', 'Ô trống');
       board.append(button);
@@ -50,11 +74,44 @@ function render() {
   }
   updateStats();
 }
-
-// Dồn phải ổn định: duyệt từ phải sang trái, giữ thứ tự các quân còn lại. O(hàng × cột).
 function applyMovement() {
-  if (LEVELS[level].mechanic !== 'right') return;
-  const { rows, cols } = LEVELS[level];
+  const { rows, cols, mechanic } = LEVELS[level];
+  if (mechanic === 'split') {
+    const middle = Math.floor(cols / 2);
+    for (let r = 1; r <= rows; r++) {
+      let write = 1;
+      for (let c = 1; c <= middle; c++) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[r][write++] = value;
+        }
+      }
+      write = cols;
+      for (let c = cols; c > middle; c--) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[r][write--] = value;
+        }
+      }
+    }
+    return;
+  }
+  if (mechanic === 'down') {
+    for (let c = 1; c <= cols; c++) {
+      let write = rows;
+      for (let r = rows; r >= 1; r--) {
+        if (grid[r][c] !== null) {
+          const value = grid[r][c];
+          grid[r][c] = null;
+          grid[write--][c] = value;
+        }
+      }
+    }
+    return;
+  }
+  if (mechanic !== 'right') return;
   for (let r = 1; r <= rows; r++) {
     let write = cols;
     for (let c = cols; c >= 1; c--) {
@@ -68,8 +125,21 @@ function applyMovement() {
 }
 
 function selectTile(position) {
-  if (!active || paused || busy || grid[position.r][position.c] === null) return;
+  if (!active || paused || busy || grid[position.r][position.c] === null || walls.has(cellKey(position)) || frozen.has(cellKey(position))) return;
   selectNormalTile(position);
+}
+
+function thawIceBeside(first, second) {
+  const config = LEVELS[level];
+  const centerRow = 1 + Math.floor((config.rows - 1) / 2);
+  const leftCenterCol = 1 + Math.floor((config.cols - 1) / 2);
+  for (const position of [first, second]) {
+    const corner = Math.abs(position.r - centerRow) === 1 &&
+      (position.c === leftCenterCol - 1 || position.c === leftCenterCol + 2);
+    for (const [dr, dc] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      if (frozen.delete(cellKey({ r: position.r + dr, c: position.c + dc })) && corner) break;
+    }
+  }
 }
 
 function completeMatch(first, second, path) {
@@ -79,13 +149,13 @@ function completeMatch(first, second, path) {
   tileAt(second).classList.add('matched');
   drawPath(path);
   const thisSession = session;
-  // Hoạt ảnh chỉ hoàn tất khi người chơi tiếp tục; phiên cũ không được sửa bàn mới.
   const commit = () => {
     if (thisSession !== session || !active) return;
     if (paused) { window.setTimeout(commit, 100); return; }
     grid[first.r][first.c] = null;
     grid[second.r][second.c] = null;
     points += 100;
+    if (LEVELS[level].mechanic === 'ice') thawIceBeside(first, second);
     applyMovement();
     clearPath();
     busy = false;
@@ -99,7 +169,6 @@ function completeMatch(first, second, path) {
 }
 
 
-// Dữ liệu hình ảnh cục bộ, chỉ sử dụng tám loại cho hai màn đầu.
 const POKEMON = [
   { name: 'Pikachu', image: 'assets/pokemon/pikachu.png' },
   { name: 'Bulbasaur', image: 'assets/pokemon/bulbasaur.png' },
@@ -109,21 +178,36 @@ const POKEMON = [
   { name: 'Meowth', image: 'assets/pokemon/meowth.png' },
   { name: 'Psyduck', image: 'assets/pokemon/psyduck.png' },
   { name: 'Eevee', image: 'assets/pokemon/eevee.png' },
+  { name: 'Snorlax', image: 'assets/pokemon/snorlax.png' },
+  { name: 'Gengar', image: 'assets/pokemon/gengar.png' },
+  { name: 'Vulpix', image: 'assets/pokemon/vulpix.png' },
+  { name: 'Mewtwo', image: 'assets/pokemon/mewtwo.png' },
+  { name: 'Mew', image: 'assets/pokemon/mew.png' },
+  { name: 'Clefairy', image: 'assets/pokemon/clefairy.png' },
+  { name: 'Pidgey', image: 'assets/pokemon/pidgey.png' },
+  { name: 'Rattata', image: 'assets/pokemon/rattata.png' },
+  { name: 'Sandshrew', image: 'assets/pokemon/sandshrew.png' },
+  { name: 'Oddish', image: 'assets/pokemon/oddish.png' },
 ];
 
 const LEVELS = [
   { name: 'Làm quen', rows: 9, cols: 16, types: 6, time: 600,
-    mechanic: 'still', label: 'Đứng yên',
-    help: 'Nối hai Pokémon giống nhau bằng đường đi có tối đa hai lần rẽ.' },
+    mechanic: 'still', label: 'Đứng yên' },
   { name: 'Dồn phải', rows: 9, cols: 16, types: 8, time: 540,
-    mechanic: 'right', label: 'Dồn sang phải →',
-    help: '' }
+    mechanic: 'right', label: 'Dồn sang phải' },
+  { name: 'Rơi xuống', rows: 9, cols: 16, types: 12, time: 510,
+    mechanic: 'down', label: 'Dồn xuống' },
+  { name: 'Tách đôi', rows: 9, cols: 16, types: 16, time: 480,
+    mechanic: 'split', label: 'Tách hai phía' },
+  { name: 'Tường chữ thập', rows: 9, cols: 16, types: 16, time: 480,
+    mechanic: 'cross', label: 'Có tường giữa' },
+  { name: 'Băng chữ thập', rows: 9, cols: 16, types: 18, time: 450,
+    mechanic: 'ice', label: 'Băng tan khi kề bên mất' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
 let active = false, paused = false, busy = false;
 let seconds = 0, points = 0, lastTick = 0, session = 0;
-// Các tập rỗng giữ giao diện thuật toán BFS tương thích với bản tham khảo.
 let walls = new Set(), frozen = new Set(), revealed = new Set();
 
 function cellKey(position) {
@@ -134,7 +218,6 @@ function sameCell(first, second) {
   return first.r === second.r && first.c === second.c;
 }
 
-// Fisher–Yates: trộn ngẫu nhiên trên bản sao, độ phức tạp O(n).
 function shuffled(values) {
   const result = [...values];
 
@@ -146,8 +229,6 @@ function shuffled(values) {
   return result;
 }
 
-// BFS theo trạng thái (hàng, cột, hướng, số lần rẽ).
-// Viền null quanh bàn cho phép nối vòng ngoài; chỉ chấp nhận tối đa hai lần rẽ.
 function findPath(board, start, goal, blocked = new Set()) {
   if (sameCell(start, goal)) {
     return null;
@@ -239,7 +320,6 @@ function getTilePositions(board = grid, blocked = walls) {
   return positions;
 }
 
-// Gom ô theo loại Pokémon rồi tìm cặp có đường đi hợp lệ.
 function findMoves(board = grid, blocked = walls, frozenCells = frozen, firstOnly = false) {
   const groups = new Map();
   const moves = [];
@@ -357,7 +437,6 @@ function start(index) {
   }
   showScreen('game');
   render();
-  say(LEVELS[level].help);
 
   if (!findMoves(grid, walls, frozen, true).length) {
     reshuffle();
@@ -406,8 +485,6 @@ function selectNormalTile(position) {
   }, 420);
 }
 
-// Khi xáo ngẫu nhiên vẫn bế tắc, đặt một cặp vào hai vị trí nối được.
-// Chỉ hoán vị giá trị: giữ nguyên số lượng mỗi loại và vị trí ô trống.
 function forceConnectablePair(positions, originalValues) {
   const pairPositions = positions.filter((position) => !frozen.has(cellKey(position)));
 
@@ -468,7 +545,6 @@ function forceConnectablePair(positions, originalValues) {
   return false;
 }
 
-// Xáo các quân còn lại, tối đa 60 lần rồi dùng phương án bảo đảm một nước đi.
 function reshuffle() {
   deselect();
   revealed.clear();
