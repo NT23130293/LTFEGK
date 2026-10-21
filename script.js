@@ -80,8 +80,16 @@ function render() {
   }
   updateStats();
 }
-function applyMovement() {
+function applyMovement(clearedPositions = []) {
   const { rows, cols, mechanic } = LEVELS[level];
+  if (mechanic === 'flipRows') {
+    const affectedRows = new Set(clearedPositions.map(position => position.r));
+    for (const r of affectedRows) {
+      const values = grid[r].slice(1, cols + 1).reverse();
+      for (let c = 1; c <= cols; c++) grid[r][c] = values[c - 1];
+    }
+    return;
+  }
   if (mechanic === 'split') {
     const middle = Math.floor(cols / 2);
     for (let r = 1; r <= rows; r++) {
@@ -207,7 +215,7 @@ function completeMatch(first, second, path) {
     revealed.delete(cellKey(second));
     points += 100;
     if (LEVELS[level].mechanic === 'ice') thawIceBeside(first, second);
-    applyMovement();
+    applyMovement([first, second]);
     clearPath();
     busy = false;
     if (!getTilePositions().length) { render(); finish(true); return; }
@@ -261,7 +269,9 @@ const LEVELS = [
   { name: 'Băng chữ thập', rows: 9, cols: 16, types: 18, time: 450,
     mechanic: 'ice', label: 'Băng tan khi kề bên mất' },
   { name: 'Màn sương', rows: 9, cols: 16, types: 24, time: 420,
-    mechanic: 'fog', label: 'Ghi nhớ hình Pokémon' }
+    mechanic: 'fog', label: 'Ghi nhớ hình Pokémon' },
+  { name: 'Đảo hàng', rows: 9, cols: 16, types: 24, time: 380,
+    mechanic: 'flipRows', label: 'Đảo hàng vừa ghép' }
 ];
 const $ = id => document.getElementById(id);
 let grid = [], level = 0, selected = null;
